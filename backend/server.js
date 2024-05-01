@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-mongoose.set('useFindAndModify', false);
 const express = require("express");
 const cors = require("cors");
 const passport = require("passport");
@@ -13,7 +12,7 @@ const User = require("./models/user");
 const Game_loop = require("./models/game_loop")
 require('dotenv').config()
 
-const GAME_LOOP_ID = '62b7e66b1da7901bfc65df0d'
+const GAME_LOOP_ID = '66322f8722ff1180484ab172'
 
 const { Server } = require('socket.io')
 const http = require('http')
@@ -38,6 +37,10 @@ io.on("connection", (socket) => {
 server.listen(3001, () => {
 })
 
+mongoose.connection.on("connected", function () {
+  console.log("MongoDB: Connected");
+  // logger.info.bind(logger, "MongoDB: Connected");
+});
 // Connect to MongoDB 
 mongoose.connect(
   process.env.MONGOOSE_DB_LINK,
@@ -85,13 +88,13 @@ app.post("/login", (req, res, next) => {
   })(req, res, next);
 });
 
-app.post("/register", (req, res) => {
+app.post("/register", async (req, res) => {
   if (req.body.username.length < 3 || req.body.password < 3) {
     return
   }
 
-  User.findOne({ username: req.body.username }, async (err, doc) => {
-    if (err) throw err;
+  let doc = await User.findOne({ username: req.body.username });
+  
     if (doc) res.send("Username already exists");
     if (!doc) {
       const hashedPassword = await bcrypt.hash(req.body.password, 10);
@@ -104,7 +107,7 @@ app.post("/register", (req, res) => {
       res.send("Loading...");
     }
   });
-});
+
 
 // Routes
 app.get("/user", checkAuthenticated, (req, res) => {
@@ -155,7 +158,7 @@ app.post('/send_bet', checkAuthenticated, async (req, res) => {
   }
   bDuplicate = false
   theLoop = await Game_loop.findById(GAME_LOOP_ID)
-  playerIdList = theLoop.active_player_id_list
+  playerIdList = theLoop?.active_player_id_list
   let now = Date.now()
   for (var i = 0; i < playerIdList.length; i++) {
     if (playerIdList[i] === req.user.id) {
@@ -330,8 +333,9 @@ app.listen(4000, () => {
 });
 
 const cashout = async () => {
-  theLoop = await Game_loop.findById(GAME_LOOP_ID)
-  playerIdList = theLoop.active_player_id_list
+  theLoop = await Game_loop.findOne({_id:GAME_LOOP_ID})
+
+  playerIdList = theLoop?.active_player_id_list
   crash_number = game_crash_value
   for (const playerId of playerIdList) {
     const currUser = await User.findById(playerId)
@@ -383,14 +387,15 @@ const loopUpdate = async () => {
       cashout()
       sent_cashout = true
       right_now = Date.now()
-      const update_loop = await Game_loop.findById(GAME_LOOP_ID)
-      await update_loop.updateOne({ $push: { previous_crashes: game_crash_value } })
-      await update_loop.updateOne({ $unset: { "previous_crashes.0": 1 } })
-      await update_loop.updateOne({ $pull: { "previous_crashes": null } })
+      const update_loop = await Game_loop.findOne({_id:GAME_LOOP_ID})
+      await Game_loop.updateOne({_id:GAME_LOOP_ID},{ $push: { previous_crashes: game_crash_value } })
+      await Game_loop.updateOne({_id:GAME_LOOP_ID},{ $unset: { "previous_crashes.0": 1 } })
+      await Game_loop.updateOne({_id:GAME_LOOP_ID},{ $pull: { "previous_crashes": null } })
       const the_round_id_list = update_loop.round_id_list
-      await update_loop.updateOne({ $push: { round_id_list: the_round_id_list[the_round_id_list.length - 1] + 1 } })
-      await update_loop.updateOne({ $unset: { "round_id_list.0": 1 } })
-      await update_loop.updateOne({ $pull: { "round_id_list": null } })
+
+      await Game_loop.updateOne({_id:GAME_LOOP_ID},{ $push: { round_id_list: the_round_id_list.length + 1 } })
+      await Game_loop.updateOne({_id:GAME_LOOP_ID},{ $unset: { "round_id_list.0": 1 } })
+      await Game_loop.updateOne({_id:GAME_LOOP_ID},{ $pull: { "round_id_list": null } })
     }
 
     if (time_elapsed > 3) {
@@ -409,8 +414,8 @@ const loopUpdate = async () => {
       }
       io.emit('update_user')
       let theLoop = await Game_loop.findById(GAME_LOOP_ID)
-      io.emit('crash_history', theLoop.previous_crashes)
-      io.emit('get_round_id_list', theLoop.round_id_list)
+      io.emit('crash_history', theLoop?.previous_crashes)
+      io.emit('get_round_id_list', theLoop?.round_id_list)
       io.emit('start_betting_phase')
       io.emit('testingvariable')
       live_bettors_table = []

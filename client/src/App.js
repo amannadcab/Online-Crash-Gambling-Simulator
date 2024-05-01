@@ -55,7 +55,7 @@ function App() {
   // Socket.io setup
   useEffect(() => {
     retrieve();
-    const socket = io.connect("http://localhost:3001")
+    const socket = io.connect("https://probable-journey-p4vwg6v7gvw3r7vj-3001.app.github.dev")
     setGlobalSocket(socket)
 
     socket.on('news_by_server', function (data) {
@@ -244,7 +244,7 @@ function App() {
 
 
   // Routes
-  const API_BASE = 'http://localhost:4000'
+  const API_BASE = 'https://probable-journey-p4vwg6v7gvw3r7vj-4000.app.github.dev'
   const register = () => {
     Axios({
       method: "POST",
